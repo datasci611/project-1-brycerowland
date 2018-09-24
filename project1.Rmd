@@ -1,0 +1,156 @@
+---
+title: "Project 1"
+author: "Bryce Rowland"
+date: "`r format(Sys.time(), '%m/%d/%Y')`"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+```{r include=FALSE}
+library(tidyverse)
+require(ggthemes)
+```
+
+##Dataset 1: Titanic Survivors
+```{r, include=FALSE}
+titanic <- as.tibble(Titanic)
+```
+
+```{r}
+child_deaths <- titanic %>%
+  filter(Age == "Child" & Class != "Crew")
+
+p <- ggplot(data = child_deaths, aes(x = Class,y = n)) + 
+  geom_bar(stat = "identity", aes(fill = Survived)) + 
+  labs(title = "All of the Children that Died on the Titanic were in 3rd Class",
+       x = "Class of children",
+       y = "Number of Children")
+p
+```
+
+```{r}
+num_children <- child_deaths %>% summarize(num_child = sum(n))
+
+children_deaths <- child_deaths %>% 
+  group_by(Survived) %>%
+  summarize(surv_totals = sum(n)) %>%
+  filter(Survived == 'No') %>% 
+  select(surv_totals)
+
+class_totals <- child_deaths %>% 
+  group_by(Class) %>% 
+  summarise(class_totals = sum(n))
+  
+
+survival_rates_by_class <- child_deaths %>% 
+  group_by(Class) %>% 
+  mutate(class_totals = sum(n)) %>% 
+  group_by(Class, Survived, class_totals) %>% 
+  summarise(surv_totals = sum(n)) %>% 
+  filter(Survived == "No") %>% 
+  mutate(death_rate = round((surv_totals/class_totals)*100,3), 
+         survival_rate = round(100-death_rate, 3))
+```
+
+
+This figure was from the dataset `Titanic`. When approaching the dataset, I was interested in the relationship between survivorship status and class. To investigate further, I honed in on the children aboard the Titanic. There were `r num_children%>% as.numeric()` on the titanic, with `r children_deaths %>% as.numeric()` of them not surviving the crash. Interestingly, the death rate for children in third class was `r survival_rates_by_class %>% ungroup() %>% filter(Class == "3rd") %>% select(death_rate) %>% as.numeric()`, while the survival rate for children in first and second class was `r survival_rates_by_class %>% ungroup() %>% filter(Class == "1st") %>% select(death_rate) %>% as.numeric()` and `r survival_rates_by_class %>% ungroup() %>% filter(Class == "2nd") %>% select(death_rate) %>% as.numeric()` for each, respectively. It would be great to have access to more data regarding individuals who were on the Titanic to do deeper analysis. 
+
+##Datset 2: Swiss
+
+```{r}
+swiss$names <- rownames(swiss)
+sw <- as.tibble(swiss) %>% 
+  mutate(Religiosity = if_else(Catholic <= 37.5, "Low Catholic", if_else(Catholic <= 62.5, "Medium Catholic", "Highly Catholic")))
+```
+
+```{r}
+p2 <- ggplot(data = sw, mapping = aes(x = Education, y = Fertility)) +
+  geom_point(aes(colour = Religiosity)) + 
+  geom_smooth(method = "lm", colour = "black") + 
+  theme_tufte() + 
+  labs(legend = "Religiosity", title = "Fertility by Education while Controlling for Religiosity in 1888 Switzerland")
+p2
+```
+
+```{r}
+avgs <- sw %>% 
+  group_by(Religiosity) %>% 
+  summarise(avg_education = mean(Education), avg_fertility = mean(Fertility))
+```
+
+
+The data from this graph are from the `swiss` dataset. These data were collected during a time of demographic transition in Switzerland when their population was transitioning to lower levels of fertility which are characteristic of developed countries. I was interested in exploring how religion and education are associated with fertility. A categorical variable was defined for religiosity based on the percent of Catholics in a given province: Low (x <=37.5%), Medium(37.5% < x <= 62.5%), High (<62.5%). We see that there is a strong negative correlation between fertility and education - which is conducive with research on the topic. I was surprised to discover that the religiously mixed provinces were those with the lowest fertility rates and the highest rates of education. One could argue that on average, the highly Catholic provinces have higher fertility rates than provinces with low religiosity. The average fertility rate for provinces with High religiosity is `r avgs %>% filter(Religiosity == "Highly Catholic") %>% select(avg_fertility) %>% as.numeric()`, while the average fertility rate for provinces with medium religiosity is `r avgs %>% filter(Religiosity == "Medium Catholic") %>% select(avg_fertility) %>% as.numeric() %>% round(4)`
+
+##Dataset 3: Diamonds
+```{r}
+diam <- as.tibble(diamonds) %>% 
+  filter(price >= 2000 & price <= 6000 & (color == "D" | color == "E" | color == "F") & (cut == "Very Good" | cut =="Premium") & (clarity != "I1" & clarity != "SI2" & clarity != "S11" ))
+  
+size_sum <- diam %>% 
+  group_by(clarity) %>% 
+  summarise(avg_carat = mean(carat), sd_carat = sd(carat), n_sqrt = sqrt(length(carat)))
+```
+
+```{r}
+p4 <- ggplot(data = diam, aes(x = price, y = carat)) + 
+  geom_point(aes(shape = cut, colour = clarity)) +
+  geom_smooth(method = "loess", se = T, colour = "orange") +
+  theme_tufte() + 
+  labs(x = "Price", y = "Carat", title = "Price by Carat in Diamonds of Varying Clarity and Cut Quality")
+p4
+
+p5 <- ggplot(data = size_sum, aes(x = clarity, y = avg_carat)) + 
+  geom_bar(stat = "identity", fill = NA, colour = "black") + 
+  geom_errorbar(aes(ymin = avg_carat - sd_carat/n_sqrt, ymax = avg_carat + sd_carat/n_sqrt, colour = "red")) + 
+  theme_tufte() + 
+  labs(title = "Average Diamond Weight by Clarity", y = "Mean Carat", x = "Clarity")
+p5
+```
+
+I was interested in exploring the data from the `diamonds` dataset from the perspective of an individual exploring their options for purchasing a ring. I did basic data wrangling to simulate preferences for rings and budgetary constraints (at least three year salary for engagement rings, right?). The budget for the purchase was between 2,000 and 6,000 dollars, a color rating of D, E, or F was preferred, and cut rating of either Very Good or Premium. The average price of a diamond with these characteristics is `r diam %>% summarise(mean(price)) %>% as.numeric() %>% round(2)`. The graph above is informative at digging deeper into the nature of pricing of round cut diamonds. Obviously, price is positively correlated with carat, with "Pearson" correlation coefficient of `r diam %>% summarise(cor(carat, price)) %>% as.numeric() %>% round(3)`. However, it is interesting to note that the clearest diamonds aren't necessarily the most expensive, but rather the lowest clarity diamonds. This is due to the weight differences in the difference cuts of diamonds that is displayed in the second graph. Presumably, since weightier diamonds are bigger, there are more opportunities for imperfections in the diamonds. It would be interesting to see how these trends hold across different styles of diamonds. 
+
+
+
+##Dataset 4: Economics
+
+```{r}
+econ <- as.tibble(economics) %>% 
+  mutate(year = str_sub(date,1,4), unemploy_rate = (unemploy/pop)*100) %>% 
+  group_by(year) %>% 
+  mutate(er_sd = sd(unemploy_rate))
+
+```
+
+```{r}
+hist <- ggplot(data = econ, mapping = aes(x = er_sd)) + 
+  geom_histogram() +
+  geom_vline(xintercept = .25, colour = "red") +
+  labs(title = "Determining Bin for economic volitility in the Economics dataset",
+       x = "Standard Deviation of Unemployment Rate by Year", 
+       y = "Count") + 
+  ggthemes::theme_tufte()
+hist
+```
+
+
+```{r}
+volatility_characteristics <- econ %>% 
+  mutate(volatility_c2 = if_else(er_sd > .25, "High Volatility Year", "Average Volatility Year")) %>% group_by(volatility_c2) %>% 
+  mutate(n = length(unemploy_rate)) %>% 
+  group_by(volatility_c2) %>% 
+  summarise(`Average Unemployment Rate` = mean(unemploy_rate),
+            `Average Personal Savings Rate` = mean(psavert),
+            `Average Median Unemployment` = mean(uempmed)) %>% 
+  gather("volatility", "stat", `Average Unemployment Rate` , `Average Personal Savings Rate`, `Average Median Unemployment`) %>% 
+  dplyr::rename(statistic = volatility)
+volatility_characteristics
+```
+
+The visualization and summaries above are from the `econmics` dataset. These data are US economic monthly time series data made available by the St. Louis Federal Reserve. I was interested in exploring the relationship between savings rates and unemployment - both in rate and in duration. The visualization represents a decision that I made in generating a variable built to characterize economic volatility in a given year. I computed the standard deviation in the unemployment rate for each year in the dataset, and then made a cutoff into high volatility or low volatility year. Note that a high volatility year does not necessarily mean that a year experienced a large decrease in the unemployment rate, it could be a large gain as well. The measure characterizes change in the economy via unemployment. This categorical variable was then used to compute summary statistics for each of unemployment rate, personal savings rate, and average median unemployment. Further analysis could be done by computing standard errors, and conducting statistical tests on the effect of volatility in the unemployment rate on each of these sample means. 
+
+
+
+
